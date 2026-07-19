@@ -78,7 +78,12 @@ class GeminiProvider(LLMProvider):
                 "No Gemini API key found. Set GEMINI_API_KEY as an environment "
                 "variable, or in Streamlit secrets (see README for setup)."
             )
-        genai.configure(api_key=api_key)
+        # transport="rest" forces plain HTTPS instead of gRPC. The default gRPC
+        # transport loads a native cygrpc DLL that locked-down Windows machines
+        # (college/work laptops with Application Control policies) often block
+        # outright — REST avoids that dependency entirely and is plenty fast
+        # for single-request calls like this.
+        genai.configure(api_key=api_key, transport="rest")
         self._model = genai.GenerativeModel(model_name)
 
     def parse_sale(self, text: str) -> dict:
