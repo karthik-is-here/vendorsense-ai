@@ -67,10 +67,26 @@ Vendor's entry: "{TEXT}"
 
 
 class GeminiProvider(LLMProvider):
-    """Gemini-backed implementation using the official google-generativeai SDK."""
+    """Gemini-backed implementation using the official google-genai SDK
+    (the current, actively-maintained Google Gen AI SDK).
 
-    def __init__(self, api_key: str | None = None, model_name: str = "gemini-1.5-flash"):
-        import google.generativeai as genai
+    Note: this project originally used the older `google-generativeai`
+    package, but that package unconditionally imports `grpc` as soon as
+    you `import google.generativeai` — even if you never make a gRPC call.
+    On locked-down Windows machines (college/work laptops with Application
+    Control policies), that import can be blocked outright, crashing the
+    app before a single API call is made. `google-genai`'s Developer API
+    client talks plain HTTPS and never touches grpc, which avoids the
+    problem entirely rather than working around it.
+    """
+
+    # NOTE: Google's free-tier model lineup changes every few months (this
+    # project alone has needed updating from 2.0 -> 2.5 -> 3.5 Flash). If
+    # you hit a 404 "no longer available" or a 429 with limit: 0, check
+    # https://ai.google.dev/gemini-api/docs/pricing for the current free
+    # model name and update the default below.
+    def __init__(self, api_key: str | None = None, model_name: str = "gemini-3.5-flash"):
+        from google import genai
 
         api_key = api_key or os.environ.get("GEMINI_API_KEY")
         if not api_key:
@@ -78,17 +94,15 @@ class GeminiProvider(LLMProvider):
                 "No Gemini API key found. Set GEMINI_API_KEY as an environment "
                 "variable, or in Streamlit secrets (see README for setup)."
             )
-        # transport="rest" forces plain HTTPS instead of gRPC. The default gRPC
-        # transport loads a native cygrpc DLL that locked-down Windows machines
-        # (college/work laptops with Application Control policies) often block
-        # outright — REST avoids that dependency entirely and is plenty fast
-        # for single-request calls like this.
-        genai.configure(api_key=api_key, transport="rest")
-        self._model = genai.GenerativeModel(model_name)
+        self._client = genai.Client(api_key=api_key)
+        self._model_name = model_name
 
     def parse_sale(self, text: str) -> dict:
         prompt = PARSE_PROMPT.replace("{TEXT}", text)
-        response = self._model.generate_content(prompt)
+        response = self._client.models.generate_content(
+            model=self._model_name,
+            contents=prompt,
+        )
         raw = (response.text or "").strip()
         # Gemini sometimes wraps JSON in ```json fences despite instructions -- strip them.
         raw = re.sub(r"^```(json)?|```$", "", raw, flags=re.MULTILINE).strip()
