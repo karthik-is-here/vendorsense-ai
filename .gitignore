@@ -1,0 +1,20 @@
+# secrets
+.env
+.streamlit/secrets.toml
+
+# runtime data (auto-seeded on first run, no need to version it)
+*.db
+*.db-journal
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# streamlit
+.streamlit/
+
+# os
+.DS_Store
